@@ -1,0 +1,144 @@
+services:
+  ovms:
+    #image: openvino/model_server:latest-gpu
+    image: openvino/model_server:weekly
+    container_name: ovms
+    restart: unless-stopped
+    user: "${PUID:-1000}:${PGID:-1000}"
+    devices:
+      - /dev/dri:/dev/dri
+    group_add:
+      - "${RENDER_GID}"
+    ports:
+      - "8001:8000"
+    volumes:
+      - ./docker_volumes/ovms/models:/models:rw
+    #environment:
+    #  - HF_ENDPOINT=${HF_ENDPOINT:-https://hf-mirror.com}
+    environment:
+      - MOE_USE_MICRO_GEMM_PREFILL=0
+    command:
+      - --source_model
+      - OpenVINO/Qwen3-Coder-30B-A3B-Instruct-int4-ov
+      - --model_repository_path
+      - models
+      - --task
+      - text_generation
+      - --rest_port
+      - "8000"
+      - --target_device
+      - GPU
+      - --tool_parser
+      - qwen3coder
+      - --enable_prefix_caching
+      - "true"
+      - --enable_tool_guided_generation
+      - "true"
+
+  openclaw-gateway:
+    #image: ${OPENCLAW_IMAGE:-openclaw:local}
+    image: ghcr.io/openclaw/openclaw:latest
+    container_name: openclaw-gateway
+    #pull_policy: always
+    privileged: true        # LeRobot device need privileged mode
+    #devices:
+    #  - /dev/ttyACM0:/dev/ttyACM0   # LeRobot device name, suggest to use devices instead of priviledged in production environment
+    environment:
+      HOME: /home/node
+      TERM: xterm-256color
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN}
+      OPENCLAW_GATEWAY_CONTROL_UI_DANGEROUSLY_ALLOW_HOST_HEADER_ORIGIN_FALLBACK: "true"
+      OPENCLAW_GATEWAY_CONTROL_UI_DANGEROUSLY_ALLOW_UNSAFE_EVAL: "true"
+      OPENCLAW_MODEL_PROVIDER: openai
+      OPENAI_API_BASE_URL: http://ovms:8000/v3
+      OPENCLAW_API_KEY: unused
+      OPENCLAW_MODEL: OpenVINO/Qwen3-Coder-30B-A3B-Instruct-int4-ov
+      PATH: ${GO_PATH}:${CONDA_DIR}/bin:$CONDA_DIR/envs/lerobot/bin
+      MANPATH: ${BREW_MANPATH}
+      INFOPATH: ${BREW_INFOPATH}
+      CONDA_DIR: ${CONDA_DIR}
+      ALL_PROXY: http://proxy-ir.intel.com:912
+      HTTP_PROXY: http://proxy-ir.intel.com:912
+      HTTPS_PROXY: http://proxy-ir.intel.com:912
+      NO_PROXY: "localhost,127.0.0.1,ovms,172.19.0.0/16,*.intel.com"
+    volumes:
+      - ${OPENCLAW_CONFIG_DIR}:/home/node/.openclaw
+      - ${OPENCLAW_WORKSPACE_DIR}:/home/node/.openclaw/workspace
+      - ${OPENCLAW_DOCKER_VOLUME_DIR}/.config:/home/node/.config
+      - ${OPENCLAW_DOCKER_VOLUME_DIR}/.local:/home/node/.local
+      - ${OPENCLAW_DOCKER_VOLUME_DIR}/.cache:/home/node/.cache
+      - ${OPENCLAW_DOCKER_VOLUME_DIR}/linux_homebrew:/home/linuxbrew/.linuxbrew/bin
+      - ${OPENCLAW_DOCKER_VOLUME_DIR}/go:/home/node/go
+      - ${OPENCLAW_DOCKER_VOLUME_DIR}/scripts:/home/node/scripts
+      - ${OPENCLAW_DOCKER_VOLUME_DIR}/app/skills:/app/skills
+    ports:
+      - "${OPENCLAW_GATEWAY_PORT:-18789}:18789"
+      - "${OPENCLAW_BRIDGE_PORT:-18790}:18790"
+    working_dir: /app
+    init: true
+    restart: unless-stopped
+    entrypoint:
+      [
+        "/usr/local/bin/node",
+        "openclaw.mjs",
+        "gateway",
+        "--allow-unconfigured",
+        "--bind",
+        "${OPENCLAW_GATEWAY_BIND:-lan}",
+        "--port",
+        "18789",
+      ]
+
+  openclaw-cli:
+    #image: ${OPENCLAW_IMAGE:-openclaw:local}
+    image: ghcr.io/openclaw/openclaw:latest
+    container_name: openclaw-cli
+    environment:
+      HOME: /home/node
+      TERM: xterm-256color
+      OPENCLAW_GATEWAY_URL: http://openclaw-gateway:18789
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN}
+      BROWSER: echo
+      OPENCLAW_MODEL_PROVIDER: openai
+      OPENAI_API_BASE_URL: http://ovms:8000/v3
+      OPENCLAW_API_KEY: unused
+      OPENCLAW_ALLOW_INSECURE_PRIVATE_WS: 1
+    volumes:
+      - ${OPENCLAW_CONFIG_DIR}:/home/node/.openclaw
+      - ${OPENCLAW_WORKSPACE_DIR}:/home/node/.openclaw/workspace
+      - ${OPENCLAW_DOCKER_VOLUME_DIR}/.config:/home/node/.config
+      - ${OPENCLAW_DOCKER_VOLUME_DIR}/.cache:/home/node/.cache
+      - ${OPENCLAW_DOCKER_VOLUME_DIR}/.local:/home/node/.local
+      - ${OPENCLAW_DOCKER_VOLUME_DIR}/linux_homebrew:/home/linuxbrew/.linuxbrew/bin
+      - ${OPENCLAW_DOCKER_VOLUME_DIR}/go:/home/node/go
+    stdin_open: true
+    tty: true
+    init: true
+    # Keep container alive with a background tail, then exec openclaw commands into it
+    entrypoint: ["/bin/sh", "-c", "tail -f /dev/null"]
+    command: []
+
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: open-webui
+    restart: unless-stopped
+    depends_on:
+      - ovms
+    ports:
+      - "3000:8080"
+    environment:
+      # 与 OVMS 文档一致：base_url 指向 /v3，请求会发到 /v3/chat/completions
+      - OPENAI_API_BASE_URL=http://ovms:8000/v3
+      - OPENAI_API_KEY=unused
+      - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY:-change-me-use-openssl-rand-hex-32}
+      # 未部署 Ollama 时可关闭，避免界面干扰
+      - ENABLE_OLLAMA_API=false
+      - MOE_USE_MICRO_GEMM_PREFILL=0
+      - HF_TOKEN=${HF_TOKEN}
+      - all_proxy=http://proxy-ir.intel.com:912
+      - no_proxy="localhost,127.0.0.1,*.intel.com"
+    volumes:
+      - ./docker_volumes/open-webui/data:/app/backend/data
+
+
+

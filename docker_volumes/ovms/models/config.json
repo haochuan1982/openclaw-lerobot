@@ -1,0 +1,18 @@
+{
+    "model_config_list": [
+        {
+            "config": {
+                "name": "OpenVINO/Qwen3-Coder-30B-A3B-Instruct-int4-ov",
+                "base_path": "OpenVINO/Qwen3-Coder-30B-A3B-Instruct-int4-ov"
+            }
+        },
+        {
+            "config": {
+                "name": "OpenVINO/Qwen2.5-Coder-14B-Instruct-int4-ov",
+                "base_path": "OpenVINO/Qwen2.5-Coder-14B-Instruct-int4-ov" 
+            }
+        }
+    ]
+}
+~
+

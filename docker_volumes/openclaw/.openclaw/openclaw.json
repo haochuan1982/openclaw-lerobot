@@ -1,0 +1,44 @@
+{
+  "gateway": {
+    "controlUi": {
+      "allowedOrigins": [
+        "http://localhost:18789",
+        "http://127.0.0.1:18789",
+        "http://10.239.167.19:18789"
+      ],
+      "dangerouslyAllowHostHeaderOriginFallback": true
+    },
+    "auth": {
+      "token": "3d6132a77847fa65fa658d56970f787abc06f4c7450e9ce1d7d5a5636f58d8ee"
+    }
+  },
+  "models": {
+    "providers": {
+      "openai": {
+        "baseUrl": "http://ovms:8000/v3",
+        "apiKey": "unused",
+        "api": "openai-completions",
+        "models": [
+          {
+            "id": "OpenVINO/Qwen3-Coder-30B-A3B-Instruct-int4-ov",
+            "name": "Qwen3-Coder-30B-A3B-Instruct-int4-ov"
+          }
+        ]
+      }
+    }
+  },
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "openai/OpenVINO/Qwen3-Coder-30B-A3B-Instruct-int4-ov"
+      }
+    }
+  },
+  "plugins": {
+    "entries": {
+      "openai": {
+        "enabled": true
+      }
+    }
+  }
+}
