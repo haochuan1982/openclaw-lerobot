@@ -1,0 +1,37 @@
+# ACT pick pipeline configuration for the SOARM API (scripts/soarm_api.py).
+# Override the location with the SOARM_CONFIG env var.
+# Relative paths are resolved against the skill directory (the parent of scripts/).
+
+model:
+  model_path: references/openvino   # exported ACT policy (act.xml / act.bin / manifest.json)
+  policy_name: act
+  backend: openvino
+  device: GPU                       # OpenVINO device: GPU, CPU, AUTO, ...
+
+# Cameras consumed by the ACT policy. Each `name` must match one of the model's
+# image inputs (images.<name>): top, head, right, left.
+#   - realsense  -> identified by `serial_number`
+#   - usb_camera -> identified by `fingerprint` (device path)
+cameras:
+  - name: top
+    driver: realsense
+    serial_number: "261222078668"
+    payload: {width: 640, height: 480, fps: 30}
+  - name: right
+    driver: usb_camera
+    fingerprint: /dev/video6
+    payload: {width: 640, height: 480, fps: 30}
+  - name: left
+    driver: usb_camera
+    fingerprint: /dev/video8
+    payload: {width: 640, height: 480, fps: 30}
+  - name: head
+    driver: usb_camera
+    fingerprint: /dev/video10
+    payload: {width: 640, height: 480, fps: 30}
+
+# Inference/control loop tuning.
+pick:
+  control_frequency: 30       # Hz
+  action_queue_threshold: 1   # keep the action queue topped up above this depth
+  max_steps: 900              # hard cap on a single pick (~30 s at 30 Hz)
